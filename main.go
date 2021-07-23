@@ -137,8 +137,8 @@ func main() {
 	dbClient = createDbConnection()
 	router := mux.NewRouter()
 
-	router.HandleFunc("/media/{id}", uploadImage).Methods(http.MethodPost)
-	router.HandleFunc("/media", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/api/media/{id}", uploadImage).Methods(http.MethodPost)
+	router.HandleFunc("/api/media", func(w http.ResponseWriter, r *http.Request) {
 		writeResponse(w, http.StatusOK, "Hello world")
 	}).Methods(http.MethodGet)
 
