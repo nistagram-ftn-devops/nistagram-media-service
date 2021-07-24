@@ -16,6 +16,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
+	"github.com/rs/cors"
 )
 
 type Media struct {
@@ -87,6 +88,21 @@ func checkIfMediaExists(postId string) bool {
 	return false
 }
 
+func getMediaByImageId(w http.ResponseWriter, r *http.Request) {
+	query := "SELECT media_id, post_id, image_url FROM media WHERE media_id = ?"
+	var media Media
+	vars := mux.Vars(r)
+	postId := vars["id"]
+	err := dbClient.Get(&media, query, postId)
+
+	if err != nil {
+		log.Println("Media for post-id ", postId, " already exists.")
+		writeResponse(w, http.StatusNotFound, "media-not-found")
+	} else {
+		writeResponse(w, http.StatusOK, media)
+	}
+}
+
 func saveMedia(m Media) *Media {
 	query := "INSERT INTO media (post_id, image_url) VALUES (?, ?)"
 	result, err := dbClient.Exec(query, m.PostId, m.ImageUrl)
@@ -138,10 +154,26 @@ func main() {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/api/media/{id}", uploadImage).Methods(http.MethodPost)
+	router.HandleFunc("/api/media/{id}", getMediaByImageId).Methods((http.MethodGet))
 	router.HandleFunc("/api/media", func(w http.ResponseWriter, r *http.Request) {
 		writeResponse(w, http.StatusOK, "Hello world")
 	}).Methods(http.MethodGet)
 
+	// headersOk := handlers.AllowedHeaders([]string{"X-Requested-With"})
+	// originsOk := handlers.AllowedOrigins([]string{os.Getenv("ORIGIN_ALLOWED")})
+	// methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS"})
+
 	log.Printf("Started nistagram-media-service on port %s", "8000")
-	log.Fatal(http.ListenAndServe("0.0.0.0:8000", router))
+	// log.Fatal(http.ListenAndServe("0.0.0.0:8000", handlers.CORS(originsOk, headersOk, methodsOk)(router)))
+
+	handler := cors.Default().Handler(router)
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:4200"},
+		AllowCredentials: true,
+	})
+
+	// Insert the middleware
+	handler = c.Handler(handler)
+	log.Fatal(http.ListenAndServe("0.0.0.0:8000", handler))
+
 }
