@@ -87,6 +87,21 @@ func checkIfMediaExists(postId string) bool {
 	return false
 }
 
+func getMediaByImageId(w http.ResponseWriter, r *http.Request) {
+	query := "SELECT media_id, post_id, image_url FROM media WHERE media_id = ?"
+	var media Media
+	vars := mux.Vars(r)
+	postId := vars["id"]
+	err := dbClient.Get(&media, query, postId)
+
+	if err == nil {
+		log.Println("Media for post-id ", postId, " already exists.")
+		writeResponse(w, http.StatusNotFound, "media-not-found")
+	} else {
+		writeResponse(w, http.StatusOK, media)
+	}
+}
+
 func saveMedia(m Media) *Media {
 	query := "INSERT INTO media (post_id, image_url) VALUES (?, ?)"
 	result, err := dbClient.Exec(query, m.PostId, m.ImageUrl)
@@ -138,6 +153,7 @@ func main() {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/api/media/{id}", uploadImage).Methods(http.MethodPost)
+	router.HandleFunc("/api/media/{id}", getMediaByImageId).Methods((http.MethodGet))
 	router.HandleFunc("/api/media", func(w http.ResponseWriter, r *http.Request) {
 		writeResponse(w, http.StatusOK, "Hello world")
 	}).Methods(http.MethodGet)
