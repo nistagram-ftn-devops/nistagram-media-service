@@ -21,23 +21,13 @@ import (
 
 type Media struct {
 	Id       string `db:"media_id"`
-	PostId   string `db:"post_id"`
 	ImageUrl string `db:"image_url"`
 }
 
 var dbClient *sqlx.DB
 
 func uploadImage(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	postId := vars["id"]
-
-	log.Println("Started upload for post-id ", postId)
-
-	exists := checkIfMediaExists(postId)
-	if exists {
-		writeResponse(w, http.StatusBadRequest, "media-exists")
-		return
-	}
+	log.Println("Started upload")
 
 	file, handler, err := r.FormFile("file")
 	if err != nil {
@@ -56,17 +46,17 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 	resp, err := cld.Upload.Upload(context.Background(), handler.Filename, uploader.UploadParams{})
 
 	if err != nil {
-		log.Println("Error while uploading image to cloudinary for post-id ", postId, err.Error())
+		log.Println("Error while uploading image to cloudinary", err.Error())
 		writeResponse(w, http.StatusInternalServerError, "image-cloudinary-upload-error")
 		return
 	}
 
 	imageUrl := resp.SecureURL
-	log.Println("Image successfully uploaded to cloudinary for post-id ", postId)
+	log.Println("Image successfully uploaded to cloudinary")
 	log.Println("Image URL is ", imageUrl)
 	os.Remove(handler.Filename)
 
-	media := saveMedia(Media{PostId: postId, ImageUrl: imageUrl})
+	media := saveMedia(Media{ImageUrl: imageUrl})
 
 	if media == nil {
 		writeResponse(w, http.StatusInternalServerError, "image-db-save-error")
@@ -75,21 +65,8 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func checkIfMediaExists(postId string) bool {
-	query := "SELECT media_id, post_id, image_url FROM media WHERE post_id = ?"
-	var media Media
-	err := dbClient.Get(&media, query, postId)
-
-	if err == nil {
-		log.Println("Media for post-id ", postId, " already exists.")
-		return true
-	}
-
-	return false
-}
-
 func getMediaByImageId(w http.ResponseWriter, r *http.Request) {
-	query := "SELECT media_id, post_id, image_url FROM media WHERE media_id = ?"
+	query := "SELECT media_id, image_url FROM media WHERE media_id = ?"
 	var media Media
 	vars := mux.Vars(r)
 	postId := vars["id"]
@@ -104,17 +81,17 @@ func getMediaByImageId(w http.ResponseWriter, r *http.Request) {
 }
 
 func saveMedia(m Media) *Media {
-	query := "INSERT INTO media (post_id, image_url) VALUES (?, ?)"
-	result, err := dbClient.Exec(query, m.PostId, m.ImageUrl)
+	query := "INSERT INTO media (image_url) VALUES (?)"
+	result, err := dbClient.Exec(query, m.ImageUrl)
 
 	if err != nil {
-		log.Println("Error while inserting media into db for post-id ", m.PostId, err.Error())
+		log.Println("Error while inserting media into db", err.Error())
 		return nil
 	}
 	id, err := result.LastInsertId()
 
 	if err != nil {
-		log.Println("Error while getting last inserted media-id from db for post-id ", m.PostId, err.Error())
+		log.Println("Error while getting last inserted media-id from db", err.Error())
 		return nil
 	}
 
@@ -153,7 +130,7 @@ func main() {
 	dbClient = createDbConnection()
 	router := mux.NewRouter()
 
-	router.HandleFunc("/api/media/{id}", uploadImage).Methods(http.MethodPost)
+	router.HandleFunc("/api/media", uploadImage).Methods(http.MethodPost)
 	router.HandleFunc("/api/media/{id}", getMediaByImageId).Methods((http.MethodGet))
 	router.HandleFunc("/api/media", func(w http.ResponseWriter, r *http.Request) {
 		writeResponse(w, http.StatusOK, "Hello world")
